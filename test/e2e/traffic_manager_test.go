@@ -512,6 +512,39 @@ var _ = Describe("Test exporting service via Azure traffic manager", Ordered, fu
 			atmValidator.ValidateProfile(ctx, atmProfileName, atmProfile)
 		})
 
+		It("Update the weight through serviceExports during runtime", func() {
+			By("Updating the serviceExport weight in one cluster")
+			servExp := wm.ServiceExportWithWeight(2)
+			Expect(wm.Fleet.MemberClusters()[0].Client().Update(ctx, &servExp)).Should(Succeed(), "Failed to update the serviceExport")
+
+			By("Validating the trafficManagerBackend status")
+			By("Validating the trafficManagerBackend status")
+			wantEndpoints := []fleetnetv1beta1.TrafficManagerEndpointStatus{
+				{
+					Weight: ptr.To(int64(67)),
+					Target: ptr.To(fmt.Sprintf(azureDNSFormat, memberDNSLabels[0], clusterLocation)),
+					From: &fleetnetv1beta1.FromCluster{
+						ClusterStatus: fleetnetv1beta1.ClusterStatus{Cluster: memberClusters[0].Name()},
+						Weight:        ptr.To(int64(67)),
+					},
+				},
+				{
+					Weight: ptr.To(int64(34)),
+					Target: ptr.To(fmt.Sprintf(azureDNSFormat, memberDNSLabels[1], clusterLocation)),
+					From: &fleetnetv1beta1.FromCluster{
+						ClusterStatus: fleetnetv1beta1.ClusterStatus{Cluster: memberClusters[1].Name()},
+						Weight:        ptr.To(int64(34)),
+					},
+				},
+			}
+			status := validator.ValidateTrafficManagerBackendIfAcceptedAndIgnoringEndpointName(ctx, hubClient, backendName, true, wantEndpoints)
+			validator.ValidateTrafficManagerBackendStatusAndIgnoringEndpointNameConsistently(ctx, hubClient, backendName, status)
+
+			By("Validating the Azure traffic manager profile")
+			atmProfile = buildDesiredATMProfile(profile, status.Endpoints)
+			atmValidator.ValidateProfile(ctx, atmProfileName, atmProfile)
+		})
+
 		It("Updating the service type", func() {
 			By("Updating the service type to clusterIP type in member-1")
 			Eventually(func() error {

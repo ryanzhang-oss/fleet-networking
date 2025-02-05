@@ -116,6 +116,19 @@ func (wm *WorkloadManager) ServiceExport() fleetnetv1alpha1.ServiceExport {
 	}
 }
 
+// ServiceExportWithWeight returns the ServiceExport definition from pre-defined service name and namespace with a weight.
+func (wm *WorkloadManager) ServiceExportWithWeight(weight int) fleetnetv1alpha1.ServiceExport {
+	return fleetnetv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: wm.namespace,
+			Name:      wm.service.Name,
+			Annotations: map[string]string{
+				objectmeta.ServiceExportAnnotationWeight: fmt.Sprintf("%d", weight),
+			},
+		},
+	}
+}
+
 // MultiClusterService returns the MultiClusterService definition from pre-defined service name and namespace.
 func (wm *WorkloadManager) MultiClusterService() fleetnetv1alpha1.MultiClusterService {
 	return fleetnetv1alpha1.MultiClusterService{
@@ -282,6 +295,11 @@ func (wm *WorkloadManager) ExportService(ctx context.Context, svcExport fleetnet
 		svcExportObj := &fleetnetv1alpha1.ServiceExport{}
 		svcExporKey := types.NamespacedName{Namespace: svcExportDef.Namespace, Name: svcExportDef.Name}
 		if err := m.Client().Create(ctx, &svcExportDef); err != nil {
+			if errors.IsAlreadyExists(err) {
+				if err = m.Client().Update(ctx, &svcExportDef); err != nil {
+					return fmt.Errorf("failed to update service export %s in cluster %s: %w", svcExportDef.Name, m.Name(), err)
+				}
+			}
 			return fmt.Errorf("failed to create service export %s in cluster %s: %w", svcExportDef.Name, m.Name(), err)
 		}
 
